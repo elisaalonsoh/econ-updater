@@ -31,9 +31,10 @@ class CEPRScraper(BaseScraper):
 
         soup = BeautifulSoup(resp.text, "html.parser")
 
-        for article in soup.select("article"):
+        # CEPR listing uses Drupal views-row divs
+        for item in soup.select(".views-row, article"):
             try:
-                title_el = article.select_one("h2 a, h3 a, h4 a, .title a")
+                title_el = item.select_one("h2 a, h3 a, h4 a, .title a")
                 if not title_el:
                     continue
 
@@ -45,19 +46,24 @@ class CEPRScraper(BaseScraper):
                 if link and not link.startswith("http"):
                     link = f"https://cepr.org{link}"
 
-                # Get any description/abstract from listing
-                desc_el = article.select_one("p, .field-body, .abstract, .summary")
-                abstract = desc_el.get_text(strip=True) if desc_el else ""
+                # Authors from listing: look for links to /about/people/
+                authors: list[str] = []
+                for a_tag in item.select("a[href*='/about/people/']"):
+                    name = a_tag.get_text(strip=True)
+                    if name and name not in authors:
+                        authors.append(name)
 
-                # Get authors from listing
-                author_el = article.select_one(
-                    ".authors, .field-authors, span[class*='author']"
-                )
-                authors_raw = author_el.get_text(strip=True) if author_el else ""
-                authors = [a.strip() for a in authors_raw.split(",") if a.strip()]
+                # Fallback: try generic author selectors
+                if not authors:
+                    author_el = item.select_one(
+                        ".authors, .field-authors, span[class*='author']"
+                    )
+                    if author_el:
+                        authors_raw = author_el.get_text(strip=True)
+                        authors = [a.strip() for a in authors_raw.split(",") if a.strip()]
 
                 # Get date
-                date_el = article.select_one(
+                date_el = item.select_one(
                     "time, .date, span[class*='date']"
                 )
                 pub_date = None
@@ -68,13 +74,14 @@ class CEPRScraper(BaseScraper):
                 if not title or not link:
                     continue
 
-                # If authors or abstract missing, try fetching the detail page
-                if link and (not authors or not abstract):
+                # Always fetch detail page for abstract (and authors if still missing)
+                abstract = ""
+                if link:
                     try:
                         detail_authors, detail_abstract = self._fetch_detail(link)
                         if not authors and detail_authors:
                             authors = detail_authors
-                        if not abstract and detail_abstract:
+                        if detail_abstract:
                             abstract = detail_abstract
                     except Exception as e:
                         logger.debug(f"[CEPR] Detail fetch failed for {link}: {e}")
@@ -99,29 +106,26 @@ class CEPRScraper(BaseScraper):
         resp = self.fetch(url)
         soup = BeautifulSoup(resp.text, "html.parser")
 
-        # Authors — try multiple selectors
+        # Authors — CEPR uses links to /about/people/author-name
         authors: list[str] = []
-        for sel in [
-            ".field--name-field-authors a",
-            ".author-name",
-            "span[class*='author'] a",
-            ".authors a",
-            "div[class*='author'] a",
-        ]:
-            els = soup.select(sel)
-            if els:
-                authors = [el.get_text(strip=True) for el in els if el.get_text(strip=True)]
-                break
+        for a_tag in soup.select("a[href*='/about/people/']"):
+            name = a_tag.get_text(strip=True)
+            if name and name not in authors:
+                authors.append(name)
+
+        # Fallback selectors
         if not authors:
-            # Fallback: look for a div/span with "author" in class containing comma-separated names
-            for sel in [".authors", ".field-authors", "div[class*='author']"]:
-                el = soup.select_one(sel)
-                if el:
-                    raw = el.get_text(strip=True)
-                    authors = [a.strip() for a in raw.split(",") if a.strip()]
+            for sel in [
+                ".field--name-field-authors a",
+                ".author-name",
+                "div[class*='author'] a",
+            ]:
+                els = soup.select(sel)
+                if els:
+                    authors = [el.get_text(strip=True) for el in els if el.get_text(strip=True)]
                     break
 
-        # Abstract
+        # Abstract — try specific selectors, then fall back to main content paragraphs
         abstract = ""
         for sel in [
             ".field--name-field-abstract",
@@ -134,6 +138,14 @@ class CEPRScraper(BaseScraper):
             if el:
                 abstract = el.get_text(strip=True)
                 break
+
+        # Fallback: grab the first substantial <p> in the main content area
+        if not abstract:
+            for p in soup.select("article p, .content p, main p, .node__content p"):
+                text = p.get_text(strip=True)
+                if len(text) > 100:  # Skip short navigation text
+                    abstract = text
+                    break
 
         return authors, abstract
 

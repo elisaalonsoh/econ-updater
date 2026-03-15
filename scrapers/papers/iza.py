@@ -71,10 +71,18 @@ class IZAScraper(BaseScraper):
                 if date_el:
                     pub_date = self._parse_date(date_el.get_text(strip=True))
 
+                # Fetch detail page for abstract
+                abstract = ""
+                if link:
+                    try:
+                        abstract = self._fetch_abstract(link)
+                    except Exception as e:
+                        logger.debug(f"[IZA] Abstract fetch failed for {link}: {e}")
+
                 papers.append(Paper(
                     title=title,
                     authors=authors,
-                    abstract="",
+                    abstract=abstract,
                     url=link,
                     source=self.SOURCE_NAME,
                     date=pub_date,
@@ -89,6 +97,27 @@ class IZAScraper(BaseScraper):
 
         logger.info(f"[IZA] Found {len(papers)} discussion papers")
         return papers
+
+    def _fetch_abstract(self, url: str) -> str:
+        """Fetch an IZA paper detail page for the abstract."""
+        resp = self.fetch(url)
+        soup = BeautifulSoup(resp.text, "html.parser")
+
+        for sel in [
+            ".abstract", "div[class*='abstract']", ".paper-abstract",
+            "#abstract", ".field-body",
+        ]:
+            el = soup.select_one(sel)
+            if el:
+                return el.get_text(strip=True)
+
+        # Fallback: first substantial paragraph in main content
+        for p in soup.select("article p, .content p, main p, section p"):
+            text = p.get_text(strip=True)
+            if len(text) > 100:
+                return text
+
+        return ""
 
     def _try_api(self, lookback_days: int) -> list[Paper]:
         """Try IZA's internal API as fallback."""

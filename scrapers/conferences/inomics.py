@@ -140,45 +140,79 @@ class INOMICSScraper(BaseScraper):
     def _extract_city_country(self, raw_location: str) -> str:
         """Extract just 'City, Country' from a full address string.
 
-        Input like: "Via Columbia 2, Rome, ItalyVia Columbia 200133 Rome , Italy"
-        Output: "Rome, Italy"
+        INOMICS locations follow the pattern:
+            CountryStreetAddressPostalCode City, Country
+        or: CountryCity, Country
+
+        Examples:
+            "PolandWarsaw, Poland" → "Warsaw, Poland"
+            "France147/151 Avenue De Flandre75019 Paris, France" → "Paris, France"
+            "GreeceAnargyrios... Spétses, Greece" → "Spétses, Greece"
+            "26408007 Barcelona, Spain" → "Barcelona, Spain"
         """
         if not raw_location:
             return ""
 
-        # First, URL-decode
-        loc = unquote(raw_location)
+        loc = unquote(raw_location).strip()
 
-        # Remove postal codes (4-6 digit sequences)
-        loc = re.sub(r"\b\d{4,6}\b", " ", loc)
-
-        # Split on known country names to find the last occurrence
-        # This handles the duplicated text pattern
-        for country in sorted(ALLOWED_COUNTRIES, key=len, reverse=True):
-            # Case-insensitive search for country at end of a segment
+        # The location always ends with "City , Country" or "City, Country"
+        # Find the LAST occurrence of ", Country" for a known country
+        best_match = None
+        for country in ALLOWED_COUNTRIES:
+            # Look for ", Country" at the end (with possible trailing whitespace)
             pattern = rf",\s*({re.escape(country)})\s*$"
             m = re.search(pattern, loc, re.IGNORECASE)
             if m:
-                country_name = m.group(1).strip()
-                # Get the text before this country match
-                before = loc[:m.start()].strip().rstrip(",")
-                # Extract the last comma-separated segment as the city
-                parts = [p.strip() for p in before.split(",") if p.strip()]
-                if parts:
-                    city = parts[-1]
-                    # Clean up extra spaces
-                    city = re.sub(r"\s+", " ", city).strip()
-                    return f"{city}, {country_name}"
-                return country_name
+                # Prefer the longest country match
+                if best_match is None or len(m.group(1)) > len(best_match.group(1)):
+                    best_match = m
 
-        # Fallback: try to find "City , Country" pattern with extra spaces
-        m = re.search(r"([A-Z][a-zA-Z\s.-]+?)\s*,\s*([A-Z][a-zA-Z\s]+?)\s*$", loc)
+        if best_match:
+            country_name = best_match.group(1).strip()
+            before = loc[:best_match.start()]
+
+            # The city is the last "word group" before the comma
+            # Remove postal codes and other junk, then grab the last city-like segment
+            # Split by common separators: digits, known country names at start
+            # Strategy: walk backwards from the end to find the city name
+            # Remove leading country name (e.g. "France" at start)
+            before = before.strip()
+
+            # Remove postal codes (sequences of digits, possibly with letters like "EH3 7QB")
+            before = re.sub(r"\b[A-Z]{0,2}\d+\s*[A-Z]*\b", " ", before)
+
+            # The city is typically the last segment after the last comma, or the last
+            # capitalized word(s) if no commas remain
+            parts = [p.strip() for p in before.split(",") if p.strip()]
+            if parts:
+                city = parts[-1]
+            else:
+                city = before
+
+            # Clean: remove street-like prefixes, keep just the city name
+            # Remove leading lowercase words (street names like "rue", "avenue")
+            city = re.sub(r"^[a-z].*?\s+(?=[A-Z])", "", city)
+
+            # Remove known country names that appear at the start
+            for c in ALLOWED_COUNTRIES:
+                if city.lower().startswith(c):
+                    remainder = city[len(c):].strip()
+                    if remainder:
+                        city = remainder
+                    break
+
+            city = re.sub(r"\s+", " ", city).strip()
+
+            if city:
+                return f"{city}, {country_name}"
+            return country_name
+
+        # Fallback: return last "City, Country" pattern
+        m = re.search(r"([A-Z][a-zA-Zéèêëàâäùûüôöïîç\s.-]+?)\s*,\s*([A-Z][a-zA-Z\s]+?)\s*$", loc)
         if m:
-            city = m.group(1).strip()
-            country = m.group(2).strip()
-            return f"{city}, {country}"
+            return f"{m.group(1).strip()}, {m.group(2).strip()}"
 
-        return raw_location
+        return loc
 
     def _fetch_detail(
         self, name: str, url: str,

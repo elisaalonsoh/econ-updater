@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -186,7 +187,40 @@ def _paper_card(paper: Paper, bg_color: str) -> str:
     """
 
 
+def _clean_conference_name(name: str) -> str:
+    """Clean conference name: remove 'Call for Papers' etc., convert to title case."""
+    # Remove common prefixes
+    name = re.sub(
+        r"^(?:CALL\s+FOR\s+PAPERS\s*[:\-–—.]?\s*|"
+        r"Call\s+for\s+Papers\s*[:\-–—.]?\s*|"
+        r"CALL\s+FOR\s+APPLICATIONS\s*[:\-–—.]?\s*|"
+        r"Call\s+for\s+Applications\s*[:\-–—.]?\s*|"
+        r"CFP\s*[:\-–—.]?\s*)",
+        "", name, flags=re.IGNORECASE
+    ).strip()
+
+    # Remove form label junk
+    name = re.sub(r"(?:Email\s*Address|Full\s*Name).*$", "", name, flags=re.IGNORECASE).strip()
+
+    # Convert ALL CAPS names to title case, but preserve acronyms
+    if name.isupper() or sum(1 for c in name if c.isupper()) > len(name) * 0.6:
+        # Title-case it, but keep short uppercase words (likely acronyms) as-is
+        words = name.split()
+        result = []
+        for w in words:
+            if len(w) <= 4 and w.isupper() and not w.isdigit():
+                result.append(w)  # Keep acronyms like "RSEP", "IWH", "NBP"
+            else:
+                result.append(w.title())
+
+        name = " ".join(result)
+
+    return name
+
+
 def _conference_card(conf: Conference) -> str:
+    name = _clean_conference_name(conf.name)
+
     deadline_str = conf.deadline.strftime("%d %b %Y") if conf.deadline else ""
     date_str = ""
     if conf.start_date and conf.end_date:
@@ -209,14 +243,18 @@ def _conference_card(conf: Conference) -> str:
 
     fields_html = " &middot; ".join(fields)
 
+    # Clean description of form labels
+    description = conf.description or ""
+    description = re.sub(r"(?:Email\s*Address|Full\s*Name).*$", "", description, flags=re.IGNORECASE).strip()
+
     return f"""
     <div style="margin:8px 0; padding:12px 16px; background-color:#eafaf1; border-radius:6px; border-left:3px solid #27ae60;">
       <a href="{conf.url}" style="color:#2c3e50; font-size:14px; font-weight:600; text-decoration:none;">
-        {conf.name}
+        {name}
       </a>
       <div style="margin:4px 0; color:#7f8c8d; font-size:12px;">
         {fields_html}
       </div>
-      {f'<p style="margin:6px 0 0; color:#555; font-size:12px;">{conf.description[:200]}</p>' if conf.description else ''}
+      {f'<p style="margin:6px 0 0; color:#555; font-size:12px;">{description[:200]}</p>' if description else ''}
     </div>
     """
