@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from scrapers.base import Conference, Paper
@@ -43,13 +43,24 @@ def build_digest(
     should_read = [p for p in scored_papers if 0.5 <= (p.relevance_score or 0) < 0.7]
     might_read = [p for p in scored_papers if (p.relevance_score or 0) < 0.5]
 
-    # Sort conferences — those with dates first, then undated ones
-    dated_confs = [c for c in conferences if c.deadline or c.start_date]
-    dated_confs.sort(
+    # Filter conferences:
+    # - Exclude if deadline has already passed
+    # - If deadline is TBA/missing, exclude if conference is less than 3 months away
+    three_months = now + timedelta(days=90)
+    filtered_confs = []
+    for c in conferences:
+        if c.deadline and c.deadline < now:
+            continue  # deadline passed
+        if not c.deadline:
+            # No deadline — only keep if conference is 3+ months away (or no date known)
+            if c.start_date and c.start_date < three_months:
+                continue
+        filtered_confs.append(c)
+
+    # Sort by deadline (soonest first), then by start date
+    filtered_confs.sort(
         key=lambda c: c.deadline or c.start_date or datetime.max.replace(tzinfo=timezone.utc)
     )
-    undated_confs = [c for c in conferences if not c.deadline and not c.start_date]
-    future_confs = dated_confs + undated_confs
 
     # Build HTML
     html = _render_html(
@@ -57,7 +68,7 @@ def build_digest(
         must_read=must_read,
         should_read=should_read,
         might_read=might_read,
-        conferences=future_confs,
+        conferences=filtered_confs,
         total_scraped=len(papers),
         total_shown=len(scored_papers),
     )
@@ -129,7 +140,7 @@ def _render_html(
 <!-- Conferences -->
 <tr><td style="padding:0 30px 20px;">
   <h2 style="margin:0 0 16px; color:#2c3e50; font-size:18px; border-bottom:2px solid #27ae60; padding-bottom:8px;">
-    Conferences & CFPs in Europe
+    Conferences
   </h2>
   {confs_html if confs_html else '<p style="color:#7f8c8d;">No new conferences found this week.</p>'}
 </td></tr>
