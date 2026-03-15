@@ -57,10 +57,8 @@ def build_digest(
                 continue
         filtered_confs.append(c)
 
-    # Sort by deadline (soonest first), then by start date
-    filtered_confs.sort(
-        key=lambda c: c.deadline or c.start_date or datetime.max.replace(tzinfo=timezone.utc)
-    )
+    # Sort by relevance (highest first)
+    filtered_confs.sort(key=lambda c: c.relevance_score or 0, reverse=True)
 
     # Build HTML
     html = _render_html(
@@ -109,6 +107,10 @@ def _render_html(
         for c in conferences:
             confs_html += _conference_card(c)
 
+    n_must = len(must_read)
+    n_should = len(should_read)
+    n_confs = len(conferences)
+
     return f"""<!DOCTYPE html>
 <html>
 <head>
@@ -126,7 +128,26 @@ def _render_html(
 <tr><td style="background-color:#2c3e50; padding:24px 30px;">
   <h1 style="margin:0; color:#ffffff; font-size:22px; font-weight:600;">Econ Research Digest</h1>
   <p style="margin:6px 0 0; color:#bdc3c7; font-size:14px;">Week of {date_str}</p>
-  <p style="margin:4px 0 0; color:#95a5a6; font-size:12px;">{total_shown} relevant papers from {total_scraped} scraped</p>
+</td></tr>
+
+<!-- Summary row -->
+<tr><td style="padding:16px 30px; background-color:#f8f9fa; border-bottom:1px solid #e9ecef;">
+  <table width="100%" cellpadding="0" cellspacing="0">
+  <tr>
+    <td align="center" style="padding:8px;">
+      <div style="font-size:24px; font-weight:700; color:#c0392b;">{n_must}</div>
+      <div style="font-size:11px; color:#7f8c8d; text-transform:uppercase; letter-spacing:0.5px;">Must Read</div>
+    </td>
+    <td align="center" style="padding:8px;">
+      <div style="font-size:24px; font-weight:700; color:#e67e22;">{n_should}</div>
+      <div style="font-size:11px; color:#7f8c8d; text-transform:uppercase; letter-spacing:0.5px;">Should Read</div>
+    </td>
+    <td align="center" style="padding:8px;">
+      <div style="font-size:24px; font-weight:700; color:#2980b9;">{n_confs}</div>
+      <div style="font-size:11px; color:#7f8c8d; text-transform:uppercase; letter-spacing:0.5px;">Conferences</div>
+    </td>
+  </tr>
+  </table>
 </td></tr>
 
 <!-- Papers -->
@@ -139,7 +160,7 @@ def _render_html(
 
 <!-- Conferences -->
 <tr><td style="padding:0 30px 20px;">
-  <h2 style="margin:0 0 16px; color:#2c3e50; font-size:18px; border-bottom:2px solid #27ae60; padding-bottom:8px;">
+  <h2 style="margin:0 0 16px; color:#2c3e50; font-size:18px; border-bottom:2px solid #2980b9; padding-bottom:8px;">
     Conferences
   </h2>
   {confs_html if confs_html else '<p style="color:#7f8c8d;">No new conferences found this week.</p>'}
@@ -278,7 +299,7 @@ def _conference_card(conf: Conference) -> str:
     fields_html = " &middot; ".join(fields)
 
     return f"""
-    <div style="margin:8px 0; padding:12px 16px; background-color:#eafaf1; border-radius:6px; border-left:3px solid #27ae60;">
+    <div style="margin:8px 0; padding:12px 16px; background-color:#eaf2f8; border-radius:6px; border-left:3px solid #2980b9;">
       <a href="{conf.url}" style="color:#2c3e50; font-size:14px; font-weight:600; text-decoration:none;">
         {name}
       </a>
