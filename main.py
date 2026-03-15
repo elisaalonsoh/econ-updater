@@ -163,9 +163,11 @@ def run(
     logger.info("STEP 1b: Scraping conferences...")
     conferences = scrape_conferences(config)
 
-    # 2. Filter out previously seen
-    new_papers = [p for p in papers if p.id not in seen]
-    new_confs = [c for c in conferences if c.id not in seen]
+    # 2. Filter out previously seen (disabled for testing — re-enable later)
+    # new_papers = [p for p in papers if p.id not in seen]
+    # new_confs = [c for c in conferences if c.id not in seen]
+    new_papers = papers
+    new_confs = conferences
     logger.info(f"New papers: {len(new_papers)}, new conferences: {len(new_confs)}")
 
     # 3. Score relevance
