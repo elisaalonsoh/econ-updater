@@ -37,13 +37,28 @@ class NBERScraper(BaseScraper):
                 if pub_date and pub_date < cutoff:
                     continue
 
-                title = entry.get("title", "").strip()
+                raw_title = entry.get("title", "").strip()
                 link = entry.get("link", "").strip()
                 summary = entry.get("summary", "").strip()
 
-                # NBER RSS often has author info in dc:creator or author
+                # NBER RSS titles often contain "-- by Author1, Author2"
+                title = raw_title
+                title_authors: list[str] = []
+                for sep in [" -- by ", " —- by ", " — by ", " - by "]:
+                    if sep in raw_title:
+                        title, author_part = raw_title.split(sep, 1)
+                        title = title.strip()
+                        title_authors = [
+                            a.strip() for a in author_part.split(",") if a.strip()
+                        ]
+                        break
+
+                # NBER RSS also has author info in dc:creator or author field
                 authors_raw = entry.get("author", "") or entry.get("dc_creator", "")
                 authors = [a.strip() for a in authors_raw.split(",") if a.strip()]
+                # Prefer authors parsed from title if dc:creator is empty
+                if not authors and title_authors:
+                    authors = title_authors
 
                 if not title or not link:
                     continue

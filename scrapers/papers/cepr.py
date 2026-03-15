@@ -45,11 +45,11 @@ class CEPRScraper(BaseScraper):
                 if link and not link.startswith("http"):
                     link = f"https://cepr.org{link}"
 
-                # Get any description/abstract
+                # Get any description/abstract from listing
                 desc_el = article.select_one("p, .field-body, .abstract, .summary")
                 abstract = desc_el.get_text(strip=True) if desc_el else ""
 
-                # Get authors
+                # Get authors from listing
                 author_el = article.select_one(
                     ".authors, .field-authors, span[class*='author']"
                 )
@@ -68,6 +68,17 @@ class CEPRScraper(BaseScraper):
                 if not title or not link:
                     continue
 
+                # If authors or abstract missing, try fetching the detail page
+                if link and (not authors or not abstract):
+                    try:
+                        detail_authors, detail_abstract = self._fetch_detail(link)
+                        if not authors and detail_authors:
+                            authors = detail_authors
+                        if not abstract and detail_abstract:
+                            abstract = detail_abstract
+                    except Exception as e:
+                        logger.debug(f"[CEPR] Detail fetch failed for {link}: {e}")
+
                 papers.append(Paper(
                     title=title,
                     authors=authors,
@@ -82,6 +93,49 @@ class CEPRScraper(BaseScraper):
 
         logger.info(f"[CEPR] Found {len(papers)} discussion papers")
         return papers
+
+    def _fetch_detail(self, url: str) -> tuple[list[str], str]:
+        """Fetch a CEPR detail page to extract authors and abstract."""
+        resp = self.fetch(url)
+        soup = BeautifulSoup(resp.text, "html.parser")
+
+        # Authors — try multiple selectors
+        authors: list[str] = []
+        for sel in [
+            ".field--name-field-authors a",
+            ".author-name",
+            "span[class*='author'] a",
+            ".authors a",
+            "div[class*='author'] a",
+        ]:
+            els = soup.select(sel)
+            if els:
+                authors = [el.get_text(strip=True) for el in els if el.get_text(strip=True)]
+                break
+        if not authors:
+            # Fallback: look for a div/span with "author" in class containing comma-separated names
+            for sel in [".authors", ".field-authors", "div[class*='author']"]:
+                el = soup.select_one(sel)
+                if el:
+                    raw = el.get_text(strip=True)
+                    authors = [a.strip() for a in raw.split(",") if a.strip()]
+                    break
+
+        # Abstract
+        abstract = ""
+        for sel in [
+            ".field--name-field-abstract",
+            ".abstract",
+            "div[class*='abstract']",
+            ".field-body",
+            ".paper-abstract",
+        ]:
+            el = soup.select_one(sel)
+            if el:
+                abstract = el.get_text(strip=True)
+                break
+
+        return authors, abstract
 
     def _parse_date(self, text: str) -> datetime | None:
         if not text:

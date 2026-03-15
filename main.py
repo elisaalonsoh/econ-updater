@@ -133,8 +133,17 @@ def scrape_conferences(config: dict) -> list[Conference]:
             logger.error(f"Failed to scrape {source_name}: {e}")
             continue
 
-    logger.info(f"Total conferences found: {len(all_confs)}")
-    return all_confs
+    # Deduplicate across sources by normalized name
+    seen_names: set[str] = set()
+    unique = []
+    for c in all_confs:
+        norm = c.name.lower().strip()
+        if norm not in seen_names:
+            seen_names.add(norm)
+            unique.append(c)
+
+    logger.info(f"Total conferences: {len(all_confs)}, unique: {len(unique)}")
+    return unique
 
 
 def run(

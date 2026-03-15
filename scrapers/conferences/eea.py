@@ -72,8 +72,17 @@ class EEAScraper(BaseScraper):
             if not found:
                 logger.info(f"[{source['name']}] No working URL found — skipping")
 
-        logger.info(f"[EEA/European] Found {len(conferences)} conferences")
-        return conferences
+        # Deduplicate by normalized name
+        seen_names: set[str] = set()
+        unique = []
+        for c in conferences:
+            norm = c.name.lower().strip()
+            if norm not in seen_names:
+                seen_names.add(norm)
+                unique.append(c)
+
+        logger.info(f"[EEA/European] Found {len(unique)} conferences (deduped from {len(conferences)})")
+        return unique
 
     def _parse_events_page(
         self, html: str, source_name: str, base_url: str
