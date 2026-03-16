@@ -2,9 +2,9 @@ name: Weekly Econ Digest
 
 on:
   schedule:
-    # Monday 07:30 UTC = 08:30 CET (winter) / 09:30 CEST (summer)
-    # Adjust to 06:30 UTC during summer time if you want exactly 08:30 CEST
-    - cron: '30 7 * * 1'
+    # Monday 08:50 UTC = 09:50 CET (winter) / 10:50 CEST (summer)
+    # Change to '50 7 * * 1' after Mar 29 if you want exactly 09:50 CEST
+    - cron: '50 8 * * 1'
 
   # Allow manual trigger for testing
   workflow_dispatch:
@@ -30,9 +30,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: data/seen.json
-          key: seen-papers-${{ github.run_number }}
+          key: seen-papers-v2-${{ github.run_number }}
           restore-keys: |
-            seen-papers-
+            seen-papers-v2-
 
       - name: Run digest
         env:
@@ -54,4 +54,4 @@ jobs:
         if: success()
         with:
           path: data/seen.json
-          key: seen-papers-${{ github.run_number }}
+          key: seen-papers-v2-${{ github.run_number }}
