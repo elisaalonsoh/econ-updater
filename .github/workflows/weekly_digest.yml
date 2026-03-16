@@ -2,9 +2,8 @@ name: Weekly Econ Digest
 
 on:
   schedule:
-    # Monday 08:50 UTC = 09:50 CET (winter) / 10:50 CEST (summer)
-    # Change to '50 7 * * 1' after Mar 29 if you want exactly 09:50 CEST
-    - cron: '50 8 * * 1'
+    # Monday 09:15 UTC = 10:15 CET (winter) / 11:15 CEST (summer)
+    - cron: '15 9 * * 1'
 
   # Allow manual trigger for testing
   workflow_dispatch:
