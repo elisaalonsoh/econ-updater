@@ -9,7 +9,7 @@ Every Monday morning, this tool:
 1. **Scrapes working papers** from NBER, arXiv (econ), CEPR, IZA, and Fed banks
 2. **Scrapes conferences** from INOMICS, WikiCFP, conference-service.com, EEA/RES, and NBER
 3. **Scores relevance** using Claude Haiku against your research profile (keyword pre-filter + LLM batch scoring)
-4. **Sends an HTML email digest** with papers grouped by relevance tier (Must Read / Should Read / Worth a Look) and upcoming conferences with structured metadata
+4. **Sends an HTML email digest** with papers grouped by relevance tier (Must Read / Should Read) and upcoming conferences with structured metadata
 
 ## Setup
 
@@ -36,7 +36,7 @@ This project uses [Resend](https://resend.com) to send the digest email. The fre
 2. Go to **API Keys** and create a new key
 3. Copy the key — you'll need it as `RESEND_API_KEY` below
 
-### 4. Set environment variables
+### 4. Set environment variables in Github
 
 | Variable | Description |
 |---|---|
