@@ -4,7 +4,7 @@ Automated weekly digest of economics working papers and European conferences, sc
 
 ## What it does
 
-Every Monday at 08:30 CET, this tool:
+Every Monday morning, this tool:
 
 1. **Scrapes working papers** from NBER, arXiv (econ), CEPR, IZA, and Fed banks
 2. **Scrapes conferences** from INOMICS, WikiCFP, conference-service.com, EEA/RES, and NBER
@@ -28,15 +28,23 @@ Edit `config.yaml` to set your:
 - Paper and conference sources to scrape
 - LLM model and relevance thresholds
 
-### 3. Set environment variables
+### 3. Sign up for Resend (email sending)
+
+This project uses [Resend](https://resend.com) to send the digest email. The free tier (100 emails/day) is more than enough.
+
+1. Sign up at [resend.com](https://resend.com) — GitHub login works
+2. Go to **API Keys** and create a new key
+3. Copy the key — you'll need it as `RESEND_API_KEY` below
+
+### 4. Set environment variables
 
 | Variable | Description |
 |---|---|
-| `ANTHROPIC_API_KEY` | API key for Claude (relevance scoring) |
-| `RESEND_API_KEY` | API key from [Resend](https://resend.com) (free tier, email sending) |
+| `ANTHROPIC_API_KEY` | API key for Claude (relevance scoring) — [console.anthropic.com](https://console.anthropic.com) |
+| `RESEND_API_KEY` | API key from Resend (see step 3 above) |
 | `RECIPIENT_EMAIL` | Your email address |
 
-### 4. Run locally
+### 5. Run locally
 
 ```bash
 # Full run (scrape + score + send email)
@@ -53,14 +61,38 @@ The HTML preview is saved to `data/preview.html`.
 
 ## GitHub Actions (automated weekly run)
 
-The included workflow at `.github/workflows/weekly_digest.yml` runs every Monday at 07:30 UTC (08:30 CET).
+The workflow at `.github/workflows/weekly_digest.yml` runs on demand via `workflow_dispatch`. Scheduling is handled externally by [cron-job.org](https://cron-job.org) (free), which calls the GitHub API to trigger the workflow on your chosen schedule. This is more reliable than GitHub's built-in cron scheduler.
 
-Add these as **repository secrets** (Settings → Secrets and variables → Actions):
+### Step 1: Add repository secrets
+
+Go to your repo → Settings → Secrets and variables → Actions, and add:
 - `ANTHROPIC_API_KEY`
 - `RESEND_API_KEY`
 - `RECIPIENT_EMAIL`
 
-You can also trigger a run manually from the Actions tab via **workflow_dispatch**.
+### Step 2: Create a GitHub Personal Access Token
+
+1. Go to GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens
+2. Click **Generate new token**, set expiration, and under **Repository access** select only this repo
+3. Under **Permissions → Actions** set to **Read and write**
+4. Click **Generate token** and copy the value (you only see it once)
+
+### Step 3: Set up cron-job.org
+
+1. Sign up free at [cron-job.org](https://cron-job.org)
+2. Create a new cronjob with these settings:
+
+| Field | Value |
+|---|---|
+| URL | `https://api.github.com/repos/YOUR_USERNAME/econ-updater/actions/workflows/weekly_digest.yml/dispatches` |
+| Method | `POST` |
+| Schedule | Your chosen day/time (e.g. Monday 08:00 UTC) |
+| Header — Key: `Authorization` | Value: `Bearer YOUR_TOKEN` |
+| Header — Key: `Accept` | Value: `application/vnd.github+json` |
+| Header — Key: `Content-Type` | Value: `application/json` |
+| Request body | `{"ref":"main"}` |
+
+3. Use **Test run** to verify you get a `204 No Content` response — this means the workflow was triggered successfully
 
 Previously seen papers are cached across runs using GitHub Actions cache (`data/seen.json`), so you won't get duplicates week to week.
 
@@ -88,5 +120,5 @@ Previously seen papers are cached across runs using GitHub Actions cache (`data/
 │       ├── confservice.py   # conference-service.com
 │       └── nber_conf.py     # NBER conferences
 └── .github/workflows/
-    └── weekly_digest.yml    # Cron schedule
+    └── weekly_digest.yml    # Workflow (triggered via cron-job.org)
 ```
