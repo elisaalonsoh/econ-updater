@@ -18,7 +18,7 @@ import yaml
 from digest.builder import build_digest
 from email_sender import send_digest
 from scorer import score_conferences_with_llm, score_papers_with_llm
-from scrapers.base import Paper, Conference
+from scrapers.base import Paper, Conference, normalize_title
 
 # Paper scrapers
 from scrapers.papers.nber import NBERScraper
@@ -104,7 +104,7 @@ def scrape_papers(config: dict) -> list[Paper]:
     seen_titles = {}
     unique = []
     for p in all_papers:
-        norm_title = p.title.lower().strip()
+        norm_title = normalize_title(p.title)
         if norm_title not in seen_titles:
             seen_titles[norm_title] = p
             unique.append(p)
@@ -164,7 +164,7 @@ def run(
     conferences = scrape_conferences(config)
 
     # 2. Filter out previously seen
-    new_papers = [p for p in papers if p.id not in seen]
+    new_papers = [p for p in papers if p.id not in seen and p.title_key not in seen]
     new_confs = [c for c in conferences if c.id not in seen]
     logger.info(f"New papers: {len(new_papers)}, new conferences: {len(new_confs)}")
 
@@ -200,6 +200,7 @@ def run(
             # Update seen set
             for p in new_papers:
                 seen.add(p.id)
+                seen.add(p.title_key)
             for c in new_confs:
                 seen.add(c.id)
             save_seen(seen)

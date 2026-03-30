@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import re
+import unicodedata
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional
@@ -10,6 +12,19 @@ from typing import Optional
 import requests
 
 logger = logging.getLogger(__name__)
+
+
+def normalize_title(title: str) -> str:
+    """Normalize a paper title for dedup comparison."""
+    t = title.lower()
+    t = unicodedata.normalize("NFKD", t)
+    # Unify dash-like characters to hyphen
+    t = re.sub(r"[\u2010-\u2015\u2212\uFE58\uFE63\uFF0D]", "-", t)
+    # Strip punctuation that varies between sources
+    t = re.sub(r"[\"'\u201c\u201d\u2018\u2019.,;:!?()\[\]{}]", "", t)
+    # Collapse all whitespace to single space
+    t = re.sub(r"\s+", " ", t)
+    return t.strip()
 
 
 @dataclass
@@ -27,6 +42,11 @@ class Paper:
     def id(self) -> str:
         """Unique identifier for deduplication."""
         return f"{self.source}:{self.url}"
+
+    @property
+    def title_key(self) -> str:
+        """Normalized title key for cross-source deduplication."""
+        return f"title:{normalize_title(self.title)}"
 
 
 @dataclass
